@@ -1,0 +1,319 @@
+# 🖥️ PLANNING B: FRONTEND (Next.js)
+
+Frontend bertanggung jawab menampilkan UI, berinteraksi dengan user, dan mengkonsumsi API dari backend Golang.
+
+---
+
+## TAHAP 1 — Setup Fondasi Project
+
+**Durasi estimasi**: 3–5 hari
+**Tujuan**: Menyiapkan kerangka Next.js yang siap dikembangkan.
+
+### Apa yang dikerjakan:
+
+**1.1 — Inisialisasi Project**
+
+Jalankan `npx create-next-app@latest kavling-frontend` dengan opsi:
+- TypeScript: **Ya** (membantu mendeteksi error lebih awal)
+- App Router: **Ya** (fitur terbaru Next.js)
+- Tailwind CSS: **Ya** (untuk styling cepat)
+- ESLint: **Ya**
+
+```
+kavling-frontend/
+├── src/
+│   ├── app/
+│   │   ├── (auth)/
+│   │   │   └── login/
+│   │   │       └── page.tsx         ← halaman login
+│   │   ├── (dashboard)/
+│   │   │   ├── layout.tsx           ← layout dengan sidebar
+│   │   │   ├── page.tsx             ← dashboard utama
+│   │   │   ├── kavling/
+│   │   │   ├── marketing/
+│   │   │   ├── customer/
+│   │   │   ├── transaksi/
+│   │   │   ├── pembayaran/
+│   │   │   ├── keuangan/
+│   │   │   ├── laporan/
+│   │   │   ├── statistik/
+│   │   │   ├── konfigurasi/
+│   │   │   └── pengguna/
+│   │   └── layout.tsx               ← root layout
+│   ├── components/
+│   │   ├── ui/                      ← komponen dasar (Button, Input, Modal, dll)
+│   │   ├── layout/                  ← Sidebar, Header, Footer
+│   │   ├── kavling/                 ← komponen khusus kavling (PetaInteraktif, dll)
+│   │   └── shared/                  ← DataTable, FileUpload, dll
+│   ├── lib/
+│   │   ├── api.ts                   ← konfigurasi axios/fetch untuk panggil API
+│   │   ├── auth.ts                  ← helper autentikasi (simpan/ambil token)
+│   │   └── utils.ts                 ← fungsi utilitas (format rupiah, format tanggal)
+│   ├── hooks/                       ← custom hooks (useAuth, useKavling, dll)
+│   ├── types/                       ← TypeScript interfaces untuk setiap entitas
+│   └── middleware.ts                ← middleware Next.js untuk cek auth
+├── public/
+│   └── ...
+├── package.json
+└── .env.local                       ← URL backend API
+```
+
+**Kenapa struktur folder begini?**
+- `(auth)` dan `(dashboard)` = **route group** di App Router. Tanda kurung berarti tidak jadi bagian URL, tapi memisahkan layout. Halaman login tidak punya sidebar, tapi halaman dashboard punya.
+- `components/ui/` = komponen kecil yang dipakai ulang (Button, Modal, Input).
+- `components/kavling/` = komponen spesifik untuk fitur kavling.
+- `lib/api.ts` = satu tempat untuk mengatur semua panggilan API ke backend.
+- `types/` = definisi TypeScript agar data dari API terjamin tipenya.
+
+**1.2 — Setup API Client**
+
+Buat file `lib/api.ts` yang mengkonfigurasi axios atau fetch:
+- Base URL dari `.env.local` (contoh: `NEXT_PUBLIC_API_URL=http://localhost:8080/api`)
+- Otomatis menambahkan header `Authorization: Bearer {token}` di setiap request
+- Otomatis redirect ke `/login` kalau dapat response 401 (token expired)
+
+**1.3 — Setup TypeScript Interfaces**
+
+Buat file di `types/` untuk setiap entitas, contoh:
+
+```typescript
+// types/kavling.ts
+interface Kavling {
+  id: number;
+  kode_kavling: string;
+  luas_tanah: number;
+  hrg_meter: number;
+  hrg_jual: number;
+  status: 0 | 1 | 2 | 3;  // 0=Kosong, 1=Booking, 2=Cash, 3=Kredit
+  polygon_points?: string;
+  path_d?: string;
+  transform?: string;
+}
+```
+
+Ini membantu IDE memberikan autocomplete dan mendeteksi error sejak awal.
+
+**1.4 — Komponen UI Dasar**
+
+Install dan setup komponen dasar menggunakan **shadcn/ui** (rekomendasi) atau buat sendiri:
+- Button, Input, Select, Modal/Dialog
+- DataTable (tabel dengan pagination, search, sorting)
+- FileUpload (drag & drop file)
+- Toast/Notification (pesan sukses/error)
+
+---
+
+## TAHAP 2 — Halaman Login & Sistem Autentikasi
+
+**Durasi estimasi**: 3–5 hari
+**Tujuan**: User bisa login dan sistem menjaga session.
+
+### Apa yang dikerjakan:
+
+**2.1 — Halaman Login (`/login`)**
+
+Komponen yang dibutuhkan:
+- Form dengan field: Username, Password
+- CAPTCHA (muncul setelah 5x gagal login — info ini dari response API)
+- Tombol "Masuk"
+- Tampilkan error message kalau login gagal
+
+Alur:
+1. User isi form dan klik "Masuk".
+2. Panggil `POST /api/auth/login` dengan username & password.
+3. Kalau sukses → simpan JWT token di cookie (httpOnly kalau bisa, atau localStorage).
+4. Redirect ke `/dashboard`.
+5. Kalau gagal → tampilkan pesan error dari API.
+
+**2.2 — Middleware Next.js (`middleware.ts`)**
+
+Middleware ini berjalan di setiap request sebelum halaman dimuat:
+1. Cek apakah ada token di cookie.
+2. Kalau **tidak ada token** dan URL bukan `/login` → redirect ke `/login`.
+3. Kalau **ada token** dan URL adalah `/login` → redirect ke `/dashboard`.
+
+**2.3 — Hook `useAuth`**
+
+Custom hook untuk mengelola state autentikasi:
+- `user` = data user yang sedang login
+- `login(username, password)` = fungsi untuk login
+- `logout()` = hapus token, redirect ke `/login`
+- `isAdmin` = shortcut untuk cek `user.is_admin === 1`
+
+**2.4 — Sidebar Dinamis**
+
+Sidebar menu ditampilkan berdasarkan hak akses:
+1. Kalau `is_admin = 1` → tampilkan semua menu.
+2. Kalau `is_admin = 0` → panggil `GET /api/users/:id/access` untuk ambil daftar menu yang boleh diakses, lalu tampilkan hanya menu tersebut.
+
+---
+
+## TAHAP 3 — Modul Master Data (UI)
+
+**Durasi estimasi**: 10–14 hari
+**Tujuan**: Halaman CRUD untuk kavling, marketing, dan customer.
+
+### 3.1 — Halaman Kavling (`/kavling`)
+
+**Komponen utama:**
+
+- **PetaInteraktif**: Komponen SVG yang menampilkan peta kavling.
+  - Setiap polygon/path diwarnai berdasarkan status:
+    - Status 0 (Kosong) = Hijau
+    - Status 1 (Booking) = Kuning
+    - Status 2 (Cash) = Biru
+    - Status 3 (Kredit) = Merah
+  - Klik polygon → tampilkan popup info kavling (kode, luas, harga, status).
+  - Kalau status 0 → tombol "Booking", "Cash", "Kredit" muncul di popup.
+
+- **TabelKavling**: DataTable berisi semua kavling dengan kolom: Kode, Luas, Harga Jual, Status. Bisa search, sort, pagination.
+
+- **FormKavling**: Modal form untuk tambah/edit kavling (kode, ukuran, luas, harga, status).
+
+- **UploadSVG**: Komponen upload file SVG → panggil `POST /api/kavling/upload-svg`.
+
+### 3.2 — Halaman Marketing (`/marketing`)
+
+- DataTable: nama, jenis kelamin, alamat, no telepon, jumlah transaksi OPEN, jumlah transaksi CLOSED.
+- Modal form tambah/edit marketing.
+- Halaman detail komisi: Klik "Lampiran" → tampilkan tabel komisi per transaksi (tanggal, kavling, jenis, fee, total).
+
+### 3.3 — Halaman Customer (`/customer`)
+
+- DataTable: nama, no KTP, alamat, no telepon.
+- Modal form tambah/edit customer dengan upload file KTP dan KK.
+- Preview gambar KTP/KK yang sudah diupload.
+
+---
+
+## TAHAP 4 — Modul Transaksi & Booking (UI)
+
+**Durasi estimasi**: 10–14 hari
+**Tujuan**: User bisa melakukan booking, transaksi cash/kredit, dan bayar cicilan.
+
+### 4.1 — Flow Booking dari Peta
+
+Alur di UI:
+1. User klik kavling **hijau** (status 0) di PetaInteraktif.
+2. Popup muncul dengan info kavling + 3 tombol: Booking, Cash, Kredit.
+3. User klik "Booking" → buka modal FormBooking.
+4. FormBooking berisi: dropdown Customer, dropdown Marketing, nominal booking, tanggal expired, keterangan.
+5. Klik "Simpan" → panggil `POST /api/booking`.
+6. Setelah sukses → warna kavling di peta berubah jadi kuning (status 1). Tampilkan toast "Booking berhasil".
+
+### 4.2 — Flow Cash dari Peta
+
+1. User klik kavling hijau → klik "Cash".
+2. FormCash muncul: Customer, Marketing, Harga Jual (otomatis dari data kavling), DP = Harga Jual (readonly, karena cash = bayar penuh), Fee Marketing, Fee Notaris.
+3. Klik "Simpan" → panggil `POST /api/transaksi/cash`.
+4. Warna kavling berubah jadi biru (status 2).
+
+### 4.3 — Flow Kredit dari Peta
+
+1. User klik kavling hijau → klik "Kredit".
+2. FormKredit muncul: Customer, Marketing, Harga Jual, DP, Lama Cicilan (dropdown: 12, 24, 36 bulan), Tanggal Mulai Cicilan, Fee Marketing, Fee Notaris.
+3. **Kalkulasi otomatis** di frontend: `cicilan_per_bulan = (harga_jual - DP) / lama_cicilan`. Tampilkan hasilnya secara real-time saat user mengisi form.
+4. Klik "Simpan" → panggil `POST /api/transaksi/kredit`.
+5. Warna kavling berubah jadi merah (status 3).
+
+### 4.4 — Konversi Booking → Cash/Kredit
+
+1. User klik kavling **kuning** (status 1) di peta.
+2. Popup menampilkan info booking + tombol "Konversi ke Cash" / "Konversi ke Kredit".
+3. Klik salah satu → buka form yang sesuai (sama seperti 4.2 atau 4.3).
+4. Klik "Simpan" → panggil `POST /api/booking/:id/convert`.
+
+### 4.5 — Halaman Pembayaran Cicilan (`/pembayaran`)
+
+- **Halaman utama**: DataTable list kavling kredit (kode, customer, cicilan/bulan, status cicilan).
+- **Halaman detail** (`/pembayaran/:id`): Info kavling + customer + kredit. Tabel riwayat cicilan (cicilan ke-1, ke-2, dst). Form bayar cicilan: tanggal, jumlah, pilih bank, upload bukti transfer, keterangan.
+- Setelah bayar sukses → baris baru muncul di tabel riwayat.
+
+---
+
+## TAHAP 5 — Modul Keuangan & Laporan (UI)
+
+**Durasi estimasi**: 7–10 hari
+**Tujuan**: Dashboard keuangan, arus kas, dan laporan.
+
+### 5.1 — Dashboard Keuangan / Rekap Kredit (`/keuangan`)
+
+- Tabel rekap semua kavling kredit: Kode, Customer, Cicilan/bulan, Lama cicilan, Tunggakan, Status bulan ini.
+- Warna baris: Merah kalau terlambat, Hijau kalau lancar.
+- Klik "Detail" → tampilkan grid cicilan bulanan (cicilan ke-X, bulan, status bayar, nominal).
+
+### 5.2 — Transaksi Keuangan / Arus Kas (`/keuangan/transaksi`)
+
+- DataTable: Tanggal, Kategori, Keterangan, Debit (pemasukan), Kredit (pengeluaran).
+- Filter tanggal (dari - sampai).
+- Modal form tambah transaksi manual: Tanggal, Jenis (Pemasukan/Pengeluaran), Kategori, Nominal, Keterangan, Pilih Bank.
+- Total di bawah tabel: Total Debit, Total Kredit, Saldo.
+
+### 5.3 — Laporan (`/laporan`)
+
+- 3 tab: Laporan Umum, Per Customer, Per Kategori.
+- Setiap tab punya filter (rentang tanggal + filter tambahan sesuai jenis).
+- Tombol "Tampilkan" → load data ke tabel.
+- Tombol "Export Excel" → panggil endpoint export dan download file .xlsx.
+
+### 5.4 — Statistik / History Pembayaran (`/statistik`)
+
+- DataTable: Tanggal, Kavling, Customer, Jenis, Cicilan ke, Nominal, Aksi.
+- Aksi: Tombol "Print" (generate & buka PDF kwitansi).
+
+---
+
+### 6.3 — Konfigurasi Umum (`/konfigurasi/sistem`)
+
+- Form: Nama Perusahaan, Alamat, No Telepon, Logo (upload gambar), Tanda Tangan (upload gambar), Data Bank untuk kwitansi.
+- Tombol "Simpan".
+
+### 6.4 — Manajemen Pengguna (`/pengguna`)
+
+*Hanya untuk Admin.*
+- DataTable: Username, Nama, Role, Status.
+- Modal form tambah/edit user.
+- Halaman pengaturan hak akses: Pilih user → tampilkan checklist semua menu → centang/uncentang → simpan.
+- Halaman log aktivitas: DataTable log (user, aksi, waktu).
+
+---
+
+## TAHAP 7 — Polish & Finishing
+
+**Durasi estimasi**: 5–7 hari
+
+### Apa yang dikerjakan:
+
+- **Dashboard utama** (`/dashboard`): Ringkasan statistik — jumlah kavling per status, total pemasukan bulan ini, jumlah tunggakan, grafik tren penjualan.
+- **Responsive design**: Pastikan semua halaman bisa digunakan di tablet (marketing sering pakai tablet di lapangan).
+- **Loading states**: Setiap halaman yang fetch data harus punya skeleton/loading indicator.
+- **Error handling**: Tampilkan pesan error yang jelas kalau API gagal.
+- **Empty states**: Tampilkan pesan/ilustrasi kalau data masih kosong.
+- **Optimistic updates**: Setelah user melakukan aksi (booking, bayar), update UI langsung tanpa menunggu refetch.
+- **Testing**: Test interaksi user di halaman-halaman kritis (booking, pembayaran, konversi).
+
+---
+
+## Tips untuk Junior Programmer
+
+1. **Mulai dari Master Data** — Jangan langsung ke Transaksi. Pastikan CRUD kavling, customer, dan marketing sudah jalan dulu.
+2. **Pahami 4 Status Kavling** — Semua logika transaksi berputar di sekitar status 0, 1, 2, 3. Ini kunci utama.
+3. **Bedakan 2 tabel transaksi** — `transaksi_kavling` = data jual-beli kavling. `transaksi` = arus kas keuangan. Namanya mirip tapi fungsinya beda.
+4. **Timezone WITA** — Semua tanggal harus pakai timezone `Asia/Makassar` (UTC+8). Setting ini di backend (Go) dan juga di frontend saat menampilkan tanggal.
+5. **Test di setiap tahap** — Jangan tunggu semua selesai baru test. Setiap kali satu endpoint atau satu halaman selesai, langsung test.
+6. **Komunikasi API** — Backend dan frontend harus sepakat soal format response. Contoh standar:
+   ```json
+   {
+     "success": true,
+     "message": "Data berhasil disimpan",
+     "data": { ... }
+   }
+   ```
+   Untuk error:
+   ```json
+   {
+     "success": false,
+     "message": "Kavling sudah ada transaksi, tidak bisa dihapus",
+     "errors": { "status": "Kavling harus berstatus Kosong" }
+   }
+   ```
