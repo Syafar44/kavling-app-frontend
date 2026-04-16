@@ -140,13 +140,13 @@ export function PetaInteraktif({
   const [popup, setPopup] = useState<PopupInfo | null>(null);
 
   const { viewBox, elements } = useMemo(
-    () => parseSVG(denahKavling.svg_content),
+    () => parseSVG(denahKavling.svg_content || ""),
     [denahKavling.svg_content]
   );
 
   const kavlingMap = useMemo(() => {
     const map = new Map<string, Kavling>();
-    for (const k of denahKavling.kavlings) {
+    for (const k of denahKavling.kavlings || []) {
       map.set(k.kode_kavling, k);
     }
     return map;

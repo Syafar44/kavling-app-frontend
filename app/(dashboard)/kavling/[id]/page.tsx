@@ -73,7 +73,7 @@ export default function DenahKavlingDetailPage() {
     try {
       const updated = await updateKavling(editTarget.id, data);
       setDenah((prev) =>
-        prev
+        prev && prev.kavlings
           ? {
               ...prev,
               kavlings: prev.kavlings.map((k) =>
@@ -96,7 +96,7 @@ export default function DenahKavlingDetailPage() {
 
   function handleTransaksiSuccess(updatedKavling: Kavling) {
     setDenah((prev) =>
-      prev
+      prev && prev.kavlings
         ? {
             ...prev,
             kavlings: prev.kavlings.map((k) =>
@@ -194,7 +194,7 @@ export default function DenahKavlingDetailPage() {
         <div>
           <h1 className="text-xl font-semibold text-gray-900">{denah.nama}</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {denah.kavlings.length} kavling
+            {denah.kavlings?.length ?? 0} kavling
           </p>
         </div>
       </div>
@@ -219,7 +219,7 @@ export default function DenahKavlingDetailPage() {
         </h3>
         <DataTable
           columns={columns}
-          data={denah.kavlings}
+          data={denah.kavlings ?? []}
           loading={false}
           emptyText="Belum ada data kavling"
           actions={(k) => (
