@@ -7,18 +7,40 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const PAGE_TITLES: Record<string, string> = {
-  "/dashboard": "Dashboard",
-  "/kavling": "Manajemen Kavling",
-  "/marketing": "Manajemen Marketing",
-  "/customer": "Manajemen Customer",
-  "/transaksi": "Transaksi",
-  "/pembayaran": "Pembayaran Cicilan",
+  "/dashboard": "Beranda",
+  "/kavling": "Siteplan",
+  "/siteplan": "Siteplan",
+  "/pembayaran": "Pembayaran",
+
   "/keuangan": "Keuangan",
-  "/keuangan/transaksi": "Transaksi Keuangan",
-  "/laporan": "Laporan",
-  "/statistik": "Statistik / History Pembayaran",
-  "/konfigurasi": "Konfigurasi Sistem",
-  "/pengguna": "Manajemen Pengguna",
+  "/keuangan/pemasukan": "Pemasukan",
+  "/keuangan/pengeluaran": "Pengeluaran",
+  "/keuangan/hutang": "Hutang",
+  "/keuangan/piutang": "Piutang",
+  "/keuangan/kategori": "Kategori Transaksi",
+  "/keuangan/mutasi-saldo": "Mutasi Saldo",
+  "/keuangan/laporan-arus-kas": "Laporan Arus Kas",
+
+  "/customer": "Customer",
+  "/customer/prospek": "Prospek",
+  "/customer/upload-file": "Upload File Customer",
+  "/customer/arsip": "Arsip Customer",
+
+  "/legalitas": "Legalitas",
+
+  "/master/marketing": "Master Marketing",
+  "/master/lokasi-kavling": "Lokasi Kavling",
+  "/master/kavling": "Data Kavling",
+  "/master/notaris": "Notaris",
+
+  "/pengaturan/profile": "Pengaturan Profile",
+  "/pengaturan/media": "Pengaturan Media",
+  "/pengaturan/hak-akses": "Hak Akses",
+  "/pengaturan/pengguna": "Pengguna",
+  "/pengaturan/list-penjualan": "List Penjualan",
+  "/pengaturan/landing": "Pengaturan Landing",
+  "/pengaturan/bank": "Bank",
+  "/pengaturan/reset-data": "Reset Data",
 };
 
 export default function DashboardLayout({
@@ -32,7 +54,7 @@ export default function DashboardLayout({
   const title =
     Object.entries(PAGE_TITLES)
       .sort(([a], [b]) => b.length - a.length)
-      .find(([path]) => pathname.startsWith(path))?.[1] ?? "Dashboard";
+      .find(([path]) => pathname.startsWith(path))?.[1] ?? "Beranda";
 
   return (
     <div className="flex min-h-screen bg-gray-50">

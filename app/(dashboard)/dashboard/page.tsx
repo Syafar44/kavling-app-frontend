@@ -1,24 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  Map,
-  Users,
-  TrendingUp,
-  AlertTriangle,
-  CheckCircle,
-  Clock,
-  DollarSign,
-  Landmark,
-} from "lucide-react";
+import { Map, Users, TrendingUp, AlertTriangle, CheckCircle, Clock, DollarSign, Landmark } from "lucide-react";
 import { formatRupiah } from "@/lib/utils";
 import api from "@/lib/api";
 import type { ApiResponse } from "@/types/api";
-import type { DenahKavling } from "@/types/kavling";
-import type { RekapKredit } from "@/types/keuangan";
-import type { Booking } from "@/types/transaksi";
 
-interface MonthStat {
+interface Ringkasan {
+  total_kavling: number;
+  kosong: number;
+  hold: number;
+  bf: number;
+  akad: number;
+  lunas: number;
+  user_cancel: number;
+  jumlah_customer: number;
+  jumlah_prospek: number;
+  jumlah_tunggakan: number;
+  nominal_tunggakan: number;
+}
+
+interface ArusKasBulan {
   bulan: number;
   pemasukan: number;
   pengeluaran: number;
@@ -49,43 +51,20 @@ const BULAN = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agt", "Sep", "O
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
-
-  const [totalKavling, setTotalKavling] = useState(0);
-  const [kosong, setKosong] = useState(0);
-  const [booking, setBooking] = useState(0);
-  const [kredit, setKredit] = useState(0);
-  const [cash, setCash] = useState(0);
-  const [tunggakan, setTunggakan] = useState(0);
-  const [monthStats, setMonthStats] = useState<MonthStat[]>([]);
+  const [ringkasan, setRingkasan] = useState<Ringkasan | null>(null);
+  const [arusKas, setArusKas] = useState<ArusKasBulan[]>([]);
   const currentMonth = new Date().getMonth() + 1;
+  const currentYear = new Date().getFullYear();
 
   useEffect(() => {
     async function load() {
       try {
-        const [denahRes, bookingRes, rekapRes, statRes] = await Promise.all([
-          api.get<ApiResponse<DenahKavling[]>>("/denah-kavling"),
-          api.get<ApiResponse<Booking[]>>("/booking"),
-          api.get<ApiResponse<RekapKredit[]>>("/keuangan/rekap-kredit"),
-          api.get<ApiResponse<MonthStat[]>>(`/statistik?year=${new Date().getFullYear()}`),
+        const [ringRes, arusRes] = await Promise.all([
+          api.get<ApiResponse<Ringkasan>>("/beranda/ringkasan"),
+          api.get<ApiResponse<ArusKasBulan[]>>(`/beranda/arus-kas?tahun=${currentYear}`),
         ]);
-
-        const denahs = denahRes.data.data ?? [];
-        const tot = denahs.reduce((s, d) => s + (d.jumlah_kavling ?? 0), 0);
-        const kos = denahs.reduce((s, d) => s + (d.jumlah_kosong ?? 0), 0);
-        const terjual = denahs.reduce((s, d) => s + (d.jumlah_terjual ?? 0), 0);
-
-        const bk = (bookingRes.data.data ?? []).length;
-        const kr = (rekapRes.data.data ?? []).length;
-        const tng = (rekapRes.data.data ?? []).filter((r) => r.tunggakan > 0).length;
-        const cs = Math.max(0, terjual - bk - kr);
-
-        setTotalKavling(tot);
-        setKosong(kos);
-        setBooking(bk);
-        setKredit(kr);
-        setCash(cs);
-        setTunggakan(tng);
-        setMonthStats(statRes.data.data ?? []);
+        setRingkasan(ringRes.data.data ?? null);
+        setArusKas(arusRes.data.data ?? []);
       } catch {
         // silently fail — cards show 0
       } finally {
@@ -93,10 +72,10 @@ export default function DashboardPage() {
       }
     }
     load();
-  }, []);
+  }, [currentYear]);
 
-  const pemasukanBulanIni = monthStats.find((m) => m.bulan === currentMonth)?.pemasukan ?? 0;
-  const maxNominal = Math.max(...monthStats.map((m) => Math.max(m.pemasukan, m.pengeluaran)), 1);
+  const pemasukanBulanIni = arusKas.find((m) => m.bulan === currentMonth)?.pemasukan ?? 0;
+  const maxNominal = Math.max(...arusKas.map((m) => Math.max(m.pemasukan, m.pengeluaran)), 1);
 
   if (loading) {
     return (
@@ -108,84 +87,60 @@ export default function DashboardPage() {
     );
   }
 
+  const r = ringkasan;
+
   return (
     <div className="space-y-6">
       {/* Kavling Status */}
       <div>
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-          Status Kavling
-        </h2>
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Status Kavling</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <StatCard title="Kavling Kosong" value={r?.kosong ?? 0} icon={<Map className="h-5 w-5 text-green-600" />} color="bg-green-50" subtitle="Tersedia" />
+          <StatCard title="HOLD / BF" value={(r?.hold ?? 0) + (r?.bf ?? 0)} icon={<Clock className="h-5 w-5 text-yellow-600" />} color="bg-yellow-50" subtitle="Dalam proses" />
+          <StatCard title="AKAD" value={r?.akad ?? 0} icon={<CheckCircle className="h-5 w-5 text-blue-600" />} color="bg-blue-50" subtitle="Sudah akad" />
+          <StatCard title="LUNAS" value={r?.lunas ?? 0} icon={<Users className="h-5 w-5 text-purple-500" />} color="bg-purple-50" subtitle="Sudah lunas" />
+        </div>
+      </div>
+
+      {/* Keuangan & Customer */}
+      <div>
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Ringkasan</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <StatCard title="Pemasukan Bulan Ini" value={formatRupiah(pemasukanBulanIni)} icon={<TrendingUp className="h-5 w-5 text-green-600" />} color="bg-green-50" />
           <StatCard
-            title="Kavling Kosong"
-            value={kosong}
-            icon={<Map className="h-5 w-5 text-green-600" />}
-            color="bg-green-50"
-            subtitle="Tersedia"
+            title="Tunggakan Cicilan"
+            value={r?.jumlah_tunggakan ?? 0}
+            icon={<AlertTriangle className="h-5 w-5 text-red-500" />}
+            color="bg-red-50"
+            subtitle={r?.nominal_tunggakan ? formatRupiah(r.nominal_tunggakan) : "Tidak ada"}
           />
           <StatCard
-            title="Booking"
-            value={booking}
-            icon={<Clock className="h-5 w-5 text-yellow-600" />}
-            color="bg-yellow-50"
-            subtitle="Menunggu konversi"
-          />
-          <StatCard
-            title="Cash"
-            value={cash}
-            icon={<CheckCircle className="h-5 w-5 text-blue-600" />}
+            title="Total Kavling"
+            value={r?.total_kavling ?? 0}
+            icon={<Landmark className="h-5 w-5 text-blue-600" />}
             color="bg-blue-50"
-            subtitle="Terjual tunai"
-          />
-          <StatCard
-            title="Kredit"
-            value={kredit}
-            icon={<Users className="h-5 w-5 text-purple-500" />}
-            color="bg-purple-50"
-            subtitle="Cicilan aktif"
+            subtitle={`${r?.kosong ?? 0} kosong · ${(r?.total_kavling ?? 0) - (r?.kosong ?? 0)} terjual`}
           />
         </div>
       </div>
 
-      {/* Keuangan */}
+      {/* Customer & Prospek */}
       <div>
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-          Keuangan Bulan Ini
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <StatCard
-            title="Pemasukan Bulan Ini"
-            value={formatRupiah(pemasukanBulanIni)}
-            icon={<TrendingUp className="h-5 w-5 text-green-600" />}
-            color="bg-green-50"
-          />
-          <StatCard
-            title="Tunggakan Cicilan"
-            value={tunggakan}
-            icon={<AlertTriangle className="h-5 w-5 text-red-500" />}
-            color="bg-red-50"
-            subtitle="Customer terlambat bayar"
-          />
-          <StatCard
-            title="Total Kavling"
-            value={totalKavling}
-            icon={<Landmark className="h-5 w-5 text-blue-600" />}
-            color="bg-blue-50"
-            subtitle={`${kosong} kosong · ${totalKavling - kosong} terjual`}
-          />
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Customer</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <StatCard title="Total Customer" value={r?.jumlah_customer ?? 0} icon={<Users className="h-5 w-5 text-blue-600" />} color="bg-blue-50" subtitle="Customer aktif" />
+          <StatCard title="Total Prospek" value={r?.jumlah_prospek ?? 0} icon={<DollarSign className="h-5 w-5 text-orange-500" />} color="bg-orange-50" subtitle="Calon customer" />
         </div>
       </div>
 
       {/* Tren Arus Kas */}
-      {monthStats.length > 0 && (
+      {arusKas.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4">
-            Arus Kas {new Date().getFullYear()}
-          </h3>
+          <h3 className="text-sm font-semibold text-gray-700 mb-4">Arus Kas {currentYear}</h3>
           <div className="flex items-end gap-1 h-36 mb-2">
             {BULAN.map((label, i) => {
               const bulanNum = i + 1;
-              const stat = monthStats.find((s) => s.bulan === bulanNum);
+              const stat = arusKas.find((s) => s.bulan === bulanNum);
               const pem = stat?.pemasukan ?? 0;
               const pen = stat?.pengeluaran ?? 0;
               const isCurrentMonth = bulanNum === currentMonth;
@@ -211,12 +166,8 @@ export default function DashboardPage() {
             })}
           </div>
           <div className="flex gap-4 text-xs text-gray-500">
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 bg-green-400 rounded inline-block" /> Pemasukan
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 bg-red-400 rounded inline-block" /> Pengeluaran
-            </span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 bg-green-400 rounded inline-block" /> Pemasukan</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 bg-red-400 rounded inline-block" /> Pengeluaran</span>
           </div>
         </div>
       )}

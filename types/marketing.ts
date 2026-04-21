@@ -1,11 +1,16 @@
 export interface Marketing {
   id: number;
+  kode_marketing: string;
   nama: string;
-  no_telp: string;
   alamat: string;
-  email: string;
-  persentase_komisi: number;
+  jenis_kelamin: "L" | "P";
+  pekerjaan: string;
+  no_telp: string;
+  foto?: string;
   status: number;
+  // legacy / komisi
+  email?: string;
+  persentase_komisi?: number;
   jumlah_open?: number;
   jumlah_closed?: number;
   created_at?: string;
@@ -14,10 +19,11 @@ export interface Marketing {
 
 export interface MarketingFormData {
   nama: string;
-  no_telp: string;
   alamat: string;
-  email: string;
-  persentase_komisi: number;
+  jenis_kelamin: "L" | "P";
+  pekerjaan: string;
+  no_telp: string;
+  foto?: string;
   status: number;
 }
 

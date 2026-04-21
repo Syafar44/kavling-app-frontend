@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
+import { ZoomIn, ZoomOut, Maximize2, Move } from "lucide-react";
 import type { DenahKavling, Kavling } from "@/types/kavling";
 import { KAVLING_STATUS_COLOR, KAVLING_STATUS_LABEL } from "@/types/kavling";
 import { formatRupiah } from "@/lib/utils";
@@ -28,7 +29,6 @@ interface SvgElement {
   text?: string;
 }
 
-/** Convert kebab-case SVG attribute names to React camelCase prop names */
 function toReactAttrs(attrs: Record<string, string>): Record<string, string | undefined> {
   const result: Record<string, string | undefined> = {};
   for (const [key, value] of Object.entries(attrs)) {
@@ -37,7 +37,6 @@ function toReactAttrs(attrs: Record<string, string>): Record<string, string | un
     } else if (key === "for") {
       result["htmlFor"] = value;
     } else {
-      // kebab-case → camelCase (e.g. stroke-width → strokeWidth)
       result[key.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())] = value;
     }
   }
@@ -59,7 +58,6 @@ function parseSVG(svgString: string): { viewBox: string; elements: SvgElement[] 
     const result: SvgElement[] = [];
     for (const child of Array.from(node.children)) {
       const tag = child.tagName.toLowerCase();
-      // skip non-visual tags
       if (["defs", "style", "script", "title", "desc"].includes(tag)) continue;
 
       const attrs: Record<string, string> = {};
@@ -88,7 +86,6 @@ function SvgElementRenderer({
 }) {
   const { tag, attrs, children } = el;
 
-  // path with id that matches a kavling
   if (tag === "path" && attrs.id) {
     const kavling = kavlingMap.get(attrs.id);
     if (kavling) {
@@ -107,7 +104,6 @@ function SvgElementRenderer({
     }
   }
 
-  // all other elements rendered as-is (decorative)
   const Tag = tag as keyof React.JSX.IntrinsicElements;
   const svgAttrs = toReactAttrs(attrs);
 
@@ -129,6 +125,10 @@ function SvgElementRenderer({
   );
 }
 
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 4;
+const ZOOM_STEP = 0.25;
+
 export function PetaInteraktif({
   denahKavling,
   onBooking,
@@ -138,6 +138,11 @@ export function PetaInteraktif({
   onEdit,
 }: PetaInteraktifProps) {
   const [popup, setPopup] = useState<PopupInfo | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const { viewBox, elements } = useMemo(
     () => parseSVG(denahKavling.svg_content || ""),
@@ -152,9 +157,35 @@ export function PetaInteraktif({
     return map;
   }, [denahKavling.kavlings]);
 
+  function resetView() {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+    setPopup(null);
+  }
+
+  function zoomIn() {
+    setZoom((z) => Math.min(MAX_ZOOM, z + ZOOM_STEP));
+  }
+
+  function zoomOut() {
+    setZoom((z) => Math.max(MIN_ZOOM, z - ZOOM_STEP));
+  }
+
+  useEffect(() => {
+    resetView();
+  }, [denahKavling.id]);
+
+  function handleWheel(e: React.WheelEvent<HTMLDivElement>) {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    const delta = -Math.sign(e.deltaY) * ZOOM_STEP;
+    setZoom((z) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z + delta)));
+  }
+
   function handlePathClick(e: React.MouseEvent<SVGElement>, kavling: Kavling) {
     e.stopPropagation();
-    const rect = (e.currentTarget.closest("svg") as SVGElement).getBoundingClientRect();
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
     setPopup({
       kavling,
       x: e.clientX - rect.left,
@@ -162,51 +193,129 @@ export function PetaInteraktif({
     });
   }
 
+  function handleMouseDown(e: React.MouseEvent<HTMLDivElement>) {
+    if ((e.target as Element).closest("path[id]")) return;
+    setIsDragging(true);
+    dragStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
+  }
+
+  function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
+    if (!isDragging) return;
+    const dx = e.clientX - dragStart.current.x;
+    const dy = e.clientY - dragStart.current.y;
+    setPan({ x: dragStart.current.panX + dx, y: dragStart.current.panY + dy });
+  }
+
+  function handleMouseUp() {
+    setIsDragging(false);
+  }
+
   return (
     <div className="relative bg-white rounded-xl border border-gray-200 p-4">
-      <h3 className="text-sm font-semibold text-gray-700 mb-3">
-        Peta Kavling Interaktif
-      </h3>
+      <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+        <div className="flex flex-wrap gap-3">
+          {([0, 1, 2, 3] as const).map((s) => (
+            <div key={s} className="flex items-center gap-1.5 text-xs text-gray-600">
+              <span
+                className="w-3 h-3 rounded-sm inline-block"
+                style={{ backgroundColor: KAVLING_STATUS_COLOR[s] }}
+              />
+              {KAVLING_STATUS_LABEL[s]}
+            </div>
+          ))}
+        </div>
 
-      {/* Legend */}
-      <div className="flex flex-wrap gap-3 mb-4">
-        {([0, 1, 2, 3] as const).map((s) => (
-          <div key={s} className="flex items-center gap-1.5 text-xs text-gray-600">
-            <span
-              className="w-3 h-3 rounded-sm inline-block"
-              style={{ backgroundColor: KAVLING_STATUS_COLOR[s] }}
-            />
-            {KAVLING_STATUS_LABEL[s]}
-          </div>
-        ))}
+        <div className="flex items-center gap-1 bg-gray-50 rounded-md border border-gray-200 p-1">
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={zoomOut}
+            disabled={zoom <= MIN_ZOOM}
+            title="Zoom Out"
+            className="h-7 w-7"
+          >
+            <ZoomOut className="h-4 w-4" />
+          </Button>
+          <span className="text-xs text-gray-600 w-12 text-center font-medium tabular-nums">
+            {Math.round(zoom * 100)}%
+          </span>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={zoomIn}
+            disabled={zoom >= MAX_ZOOM}
+            title="Zoom In"
+            className="h-7 w-7"
+          >
+            <ZoomIn className="h-4 w-4" />
+          </Button>
+          <div className="w-px h-5 bg-gray-300 mx-1" />
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={resetView}
+            title="Reset"
+            className="h-7 w-7"
+          >
+            <Maximize2 className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
-      {/* SVG Map */}
-      <div className="relative overflow-auto" onClick={() => setPopup(null)}>
-        <svg
-          viewBox={viewBox}
-          className="w-full border border-gray-100 rounded bg-gray-50"
-          style={{ minHeight: 300 }}
+      <div
+        ref={containerRef}
+        className="relative overflow-hidden rounded border border-gray-100 bg-gray-50"
+        style={{
+          height: "calc(100vh - 340px)",
+          minHeight: 400,
+          cursor: isDragging ? "grabbing" : "grab",
+        }}
+        onClick={() => setPopup(null)}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onWheel={handleWheel}
+      >
+        <div
+          className="absolute inset-0 flex items-center justify-center"
+          style={{
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+            transformOrigin: "center center",
+            transition: isDragging ? "none" : "transform 120ms ease-out",
+          }}
         >
-          {elements.map((el, i) => (
-            <SvgElementRenderer
-              key={i}
-              el={el}
-              kavlingMap={kavlingMap}
-              onPathClick={handlePathClick}
-            />
-          ))}
-        </svg>
+          <svg
+            viewBox={viewBox}
+            className="w-full h-full max-h-full"
+            preserveAspectRatio="xMidYMid meet"
+            style={{ pointerEvents: "auto" }}
+          >
+            {elements.map((el, i) => (
+              <SvgElementRenderer
+                key={i}
+                el={el}
+                kavlingMap={kavlingMap}
+                onPathClick={handlePathClick}
+              />
+            ))}
+          </svg>
+        </div>
 
-        {/* Popup */}
+        <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-white/90 backdrop-blur px-2 py-1 rounded text-xs text-gray-500 pointer-events-none">
+          <Move className="h-3 w-3" />
+          Drag untuk geser · Ctrl+Scroll untuk zoom
+        </div>
+
         {popup && (
           <div
             className="absolute z-10 bg-white shadow-xl border border-gray-200 rounded-lg p-4 w-64"
             style={{
-              left: Math.min(popup.x + 10, 500),
-              top: popup.y + 10,
+              left: Math.min(popup.x + 10, (containerRef.current?.clientWidth ?? 500) - 270),
+              top: Math.min(popup.y + 10, (containerRef.current?.clientHeight ?? 400) - 200),
             }}
             onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
           >
             <p className="font-semibold text-gray-800">
               {popup.kavling.kode_kavling}
